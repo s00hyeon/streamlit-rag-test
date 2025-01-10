@@ -1,0 +1,11 @@
+streamlit
+pandas
+numpy
+openpyxl
+langchain
+langchain-core
+langchain-community
+transformers
+sentence-transformers
+faiss-cpu
+langchain_chroma
