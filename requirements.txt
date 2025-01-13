@@ -1,10 +1,13 @@
 streamlit
 pandas
 numpy
+plotly
+nbformat>=4.2.0
 openpyxl
 langchain
 langchain-core
 langchain-community
+langchain_huggingface
 transformers
 sentence-transformers
 faiss-cpu

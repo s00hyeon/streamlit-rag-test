@@ -211,6 +211,7 @@ def main():
                     st.write(f"열 수: {st.session_state.original_df.shape[1]}")
                     st.write("컬럼 목록:", ", ".join(st.session_state.original_df.columns.tolist()))
                 
+                
                 # 전처리 시작 버튼
                 if st.sidebar.button("데이터 전처리 시작"):
                     
