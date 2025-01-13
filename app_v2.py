@@ -155,14 +155,6 @@ def main():
     if 'processed_df_q' not in st.session_state:
         st.session_state.processed_df_q = None
     
-    # 임베딩 모델 선택
-    embedding_type = st.sidebar.selectbox(
-        "임베딩 모델 선택",
-        ["ko-sroberta", "multilingual-e5", "openai"],
-        help="Choose the embedding model to use"
-    )
-    
-    # 데이터 입력 방식 선택
     # 데이터 입력 방식 선택
     use_file_upload = st.sidebar.toggle("파일 업로드 사용", value=False, 
                                       help="파일 업로드와 텍스트 입력 중 선택하세요")    
@@ -182,6 +174,13 @@ def main():
             value=sample_text.replace('            ',''),
             height=200
         )
+        
+    # 임베딩 모델 선택
+    embedding_type = st.sidebar.selectbox(
+        "임베딩 모델 선택",
+        ["ko-sroberta", "multilingual-e5", "openai"],
+        help="Choose the embedding model to use"
+    )
     
     # 탭 생성
     tab1, tab2, tab3 = st.tabs(["임베딩변환", "유사도측정", "시각화"])
@@ -214,7 +213,9 @@ def main():
                 st.subheader("원본 데이터 미리보기")
                 st.dataframe(st.session_state.original_df.head())
                 
-                if st.sidebar.button("데이터 전처리 시작"):
+                btn_start_embedding = st.sidebar.button("데이터 전처리 시작")
+                
+                if btn_start_embedding:
                     # 임베딩 모델 초기화
                     embedding_function = initialize_embeddings(embedding_type)
                     st.session_state.embedding_func = embedding_function
@@ -235,12 +236,17 @@ def main():
                     
                     with st.expander("전처리된 데이터 미리보기"):
                         st.dataframe(st.session_state.processed_df.head())
+                        
+                else:
+                    st.info('좌측 사이드바에서 데이터 전처리 시작 버튼을 클릭하세요.')
                 
         # 탭2: 유사도측정
         with tab2:
             if st.session_state.processed_df is None:
                 st.warning("먼저 탭1에서 데이터 전처리를 진행해주세요.")
             else:
+                st.subheader(f"예상질의에 대한 유사도 측정하기")
+                st.markdown(f" - embedding model: {embedding_type}")
                 # 기존 탭2 로직 유지
                 with st.expander("전처리된 데이터 미리보기"):
                     st.dataframe(st.session_state.processed_df.head())
@@ -264,21 +270,19 @@ def main():
                 
                 # 사용자 질의 입력
                 query_text = st.text_input(
-                    "유사도 계산을 위한 질의를 입력하세요.",
+                    "유사도 계산을 위한 질의를 입력 후 엔터를 누르세요. (e.g. 한강이 어디에요?)",
                     key="query_text",
                     on_change=process_query
                 )
                 
                 # 출력
                 if st.session_state.processed_df_q is not None:
-                    
-                    
                     sorted_df = st.session_state.processed_df_q.sort_values(by='score(cosine)', ascending=False)
                     st.dataframe(sorted_df)
 
         # 탭3: 시각화
         with tab3:
-            
+            st.markdown(f" - embedding model: {embedding_type}")
             btn_pca = st.button('차원축소 및 시각화')
             if btn_pca and use_file_upload:
                 st.warning('파일 업로드 시각화는 준비중입니다.')
