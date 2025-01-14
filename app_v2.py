@@ -307,11 +307,12 @@ def main():
                 )
                 
                 # 사용자 질의의 임베딩 구하기
-                q_document = [Document(page_content=query_text)]
-                vectorstore_current = FAISS.from_documents(documents=q_document, embedding=st.session_state.embedding_func)
-                vector_result_q = vectorstore_current.index.reconstruct_n(0, vectorstore_current.index.ntotal)
-                with st.expander(f"질의 **{query_text}**에 대한 벡터 변환 결과"):
-                    st.write(f"{vector_result_q}")
+                if query_text is not None:
+                    q_document = [Document(page_content=query_text)]
+                    vectorstore_current = FAISS.from_documents(documents=q_document, embedding=st.session_state.embedding_func)
+                    vector_result_q = vectorstore_current.index.reconstruct_n(0, vectorstore_current.index.ntotal)
+                    with st.expander(f"질의 **{query_text}**에 대한 벡터 변환 결과"):
+                        st.write(f"{vector_result_q}")
                 
                 # 출력
                 if st.session_state.processed_df_q is not None:
