@@ -17,6 +17,8 @@ from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from sklearn.decomposition import PCA
 import plotly.express as px
 
+NAMES_EMBEDDING = ["ko-sroberta", "BAAI/bge-m3", "multilingual-e5", "openai (text-embedding-3-large)"]
+
 # OpenAI API 키 관리 함수는 동일하게 유지
 def get_openai_api_key() -> Optional[str]:
     if 'OPENAI_API_KEY' in st.secrets:
@@ -39,11 +41,17 @@ def get_openai_api_key() -> Optional[str]:
 
 # 임베딩 모델 초기화 함수 추가
 def initialize_embeddings(embedding_type: str):
-    if embedding_type == "openai":
+    if embedding_type == "openai (text-embedding-3-large)":
         return OpenAIEmbeddings(model="text-embedding-3-large")
     elif embedding_type == "ko-sroberta":
         return HuggingFaceEmbeddings(
             model_name="jhgan/ko-sroberta-multitask",
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True}
+        )
+    elif embedding_type == "BAAI/bge-m3":
+            return HuggingFaceEmbeddings(
+            model_name="BAAI/bge-m3",
             model_kwargs={"device": "cpu"},
             encode_kwargs={"normalize_embeddings": True}
         )
@@ -76,7 +84,7 @@ def save_df_to_docs(df, fn):
     st.sidebar.write(f"{len(all_documents)} ROWS")
     return all_documents
 
-# 나머지 함수들은 동일하게 유지
+# 문서->벡터스토어어
 def save_docs_to_faiss(all_documents, embedding_function):
     vectorstore = FAISS.from_documents(documents=all_documents, embedding=embedding_function)
     vector_result = vectorstore.index.reconstruct_n(0, vectorstore.index.ntotal)
@@ -92,10 +100,11 @@ def array_to_df(df, vector_result):
     df_vector = pd.DataFrame(array_data, columns=column_names)    
     return pd.concat([df, df_vector], axis=1)
 
-# 콜백 함수 정의 - 유사도 계산, 계산결과 추가가
+# 콜백 함수 정의 - 유사도 계산, 계산결과(cosine, L2, dot_product) 추가
 def process_query():
     st.session_state.processed_df_q = None
     st.session_state.processed_df_temp = st.session_state.processed_df
+    cols_only_vec = [x for x in list(st.session_state.processed_df_temp.columns) if 'vec_' in x]
     
     query_text = st.session_state.query_text
     compression_retriever = st.session_state.compression_retriever
@@ -109,6 +118,19 @@ def process_query():
         # 유사도측정-cosine
         compression_result = compression_retriever.invoke(query_text)
         
+        
+        # 사용자 질의의 임베딩 구하기
+        q_document = [Document(page_content=query_text)]
+        vectorstore_current = FAISS.from_documents(documents=q_document, embedding=st.session_state.embedding_func)
+        vector_result_q = vectorstore_current.index.reconstruct_n(0, vectorstore_current.index.ntotal)
+        # st.markdown(f"질의 **{query_text}**에 대한 벡터 변환 결과: {vector_result_q}")
+        
+        # 유사도측정-dot product
+        vals_temp = st.session_state.processed_df_temp.loc[:, cols_only_vec].values
+        res_dot_products = [np.dot(vector_result_q, x) for x in vals_temp]
+        # st.write(res_dot_products)
+        
+        
         # query와 score 컬럼이 이미 있는지 확인
         if 'query' not in st.session_state.processed_df_temp.columns:
             st.session_state.processed_df_temp.insert(1, 'query', None)
@@ -116,6 +138,8 @@ def process_query():
             st.session_state.processed_df_temp.insert(2, 'score(cosine)', None)
         if 'score(L2)' not in st.session_state.processed_df_temp.columns:
             st.session_state.processed_df_temp.insert(3, 'score(L2)', None)
+        if 'dot_product' not in st.session_state.processed_df_temp.columns:
+            st.session_state.processed_df_temp.insert(4, 'dot_product', None) 
             
         # 유사도 계산결과 추가
         for idx, val in enumerate(compression_result):
@@ -126,6 +150,7 @@ def process_query():
             st.session_state.processed_df_temp.loc[row, 'query'] = query_text
             st.session_state.processed_df_temp.loc[row, 'score(cosine)'] = val
             st.session_state.processed_df_temp.loc[row, 'score(L2)'] = val_l2
+            st.session_state.processed_df_temp.loc[row, 'dot_product'] = res_dot_products[idx]
         
         st.session_state.processed_df_q = st.session_state.processed_df_temp
 
@@ -183,7 +208,7 @@ def main():
     # 임베딩 모델 선택
     embedding_type = st.sidebar.selectbox(
         "임베딩 모델 선택",
-        ["ko-sroberta", "multilingual-e5", "openai"],
+        NAMES_EMBEDDING,
         help="Choose the embedding model to use"
     )
     
@@ -251,7 +276,7 @@ def main():
                 st.warning("먼저 탭1에서 데이터 전처리를 진행해주세요.")
             else:
                 st.subheader(f"예상질의에 대한 유사도 측정하기")
-                st.markdown(f" - embedding model: {embedding_type}")
+                st.markdown(f" - embedding model: `{embedding_type}`")
                 # 기존 탭2 로직 유지
                 with st.expander("전처리된 데이터 미리보기"):
                     st.dataframe(st.session_state.processed_df.head())
@@ -281,6 +306,13 @@ def main():
                     on_change=process_query
                 )
                 
+                # 사용자 질의의 임베딩 구하기
+                q_document = [Document(page_content=query_text)]
+                vectorstore_current = FAISS.from_documents(documents=q_document, embedding=st.session_state.embedding_func)
+                vector_result_q = vectorstore_current.index.reconstruct_n(0, vectorstore_current.index.ntotal)
+                with st.expander(f"질의 **{query_text}**에 대한 벡터 변환 결과"):
+                    st.write(f"{vector_result_q}")
+                
                 # 출력
                 if st.session_state.processed_df_q is not None:
                     sorted_df = st.session_state.processed_df_q.sort_values(by='score(cosine)', ascending=False)
@@ -288,7 +320,7 @@ def main():
 
         # 탭3: 시각화
         with tab3:
-            st.markdown(f" - embedding model: {embedding_type}")
+            st.markdown(f" - embedding model: `{embedding_type}`")
             btn_pca = st.button('차원축소 및 시각화')
             if btn_pca and use_file_upload:
                 st.warning('파일 업로드 시각화는 준비중입니다.')
