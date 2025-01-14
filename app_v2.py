@@ -100,9 +100,12 @@ def process_query():
     query_text = st.session_state.query_text
     compression_retriever = st.session_state.compression_retriever
     
-    if query_text:        
+    if query_text:
+        n_rows = st.session_state.processed_df_temp.shape[0]
+        # st.write(f"n rows = {n_rows}")
         # 유사도측정-L2
-        res_l2 = st.session_state.vectorstore.similarity_search_with_score(query_text)
+        res_l2 = st.session_state.vectorstore.similarity_search_with_score(query_text, k=n_rows)
+        # st.write(res_l2)
         # 유사도측정-cosine
         compression_result = compression_retriever.invoke(query_text)
         
@@ -168,6 +171,8 @@ def main():
             꽁꽁 언 한강 위로 고양이가 돌아다닙니다.
             한강 작가가 작년에 노벨문학상을 받았어요.
             한강에서 먹는 라면이 제일 맛있죠.
+            한강 소설 추천해주세요.
+            한강 공원으로 자전거 타러 가자.
         '''
         text_input = st.sidebar.text_area(
             "데이터를 입력하세요 (각 줄을 새로운 항목으로 처리)",
@@ -252,7 +257,8 @@ def main():
                     st.dataframe(st.session_state.processed_df.head())
                     
                 # Retriever load
-                retriever = st.session_state.vectorstore.as_retriever()
+                row_num = st.session_state.processed_df.shape[0]
+                retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": row_num})
                 
                 embeddings_filter = EmbeddingsFilter(
                     embeddings=st.session_state.embedding_func,
@@ -306,10 +312,19 @@ def main():
                         st.dataframe(process_df_pca)
                                     
                     # 3D 산점도 생성
-                    fig = px.scatter_3d(process_df_pca
-                                        ,x='PC1', y='PC2', z='PC3'
-                                        ,title='3D PCA Visualization'
-                                        ,symbol='content')
+                    toggle_vis_value = st.toggle("차트에 값 나타내기", value=True)
+                    vis_title = f'3D PCA Visualization - {embedding_type}'
+                    if toggle_vis_value:
+                        fig = px.scatter_3d(process_df_pca
+                                            ,x='PC1', y='PC2', z='PC3'
+                                            ,title=vis_title
+                                            ,text='content'
+                                            ,symbol='content')
+                    else:
+                        fig = px.scatter_3d(process_df_pca
+                                            ,x='PC1', y='PC2', z='PC3'
+                                            ,title=vis_title
+                                            ,symbol='content')
                     st.plotly_chart(fig, use_container_width=True)
                     
             else:
