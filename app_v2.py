@@ -100,7 +100,7 @@ def array_to_df(df, vector_result):
     df_vector = pd.DataFrame(array_data, columns=column_names)    
     return pd.concat([df, df_vector], axis=1)
 
-# 콜백 함수 정의 - 유사도 계산, 계산결과(cosine, L2, dot_product) 추가
+# 콜백 함수 정의 - 유사도 계산, 계산결과(cosine, L2, dot_product, magnitude) 추가
 def process_query():
     st.session_state.processed_df_q = None
     st.session_state.processed_df_temp = st.session_state.processed_df
@@ -126,8 +126,8 @@ def process_query():
         # st.markdown(f"질의 **{query_text}**에 대한 벡터 변환 결과: {vector_result_q}")
         
         # 유사도측정-dot product
-        vals_temp = st.session_state.processed_df_temp.loc[:, cols_only_vec].values
-        res_dot_products = [np.dot(vector_result_q, x) for x in vals_temp]
+        df_vals_temp = st.session_state.processed_df_temp.loc[:, cols_only_vec]
+        res_dot_products = [np.dot(vector_result_q, x) for x in df_vals_temp.values]
         # st.write(res_dot_products)
         
         
@@ -139,7 +139,9 @@ def process_query():
         if 'score(L2)' not in st.session_state.processed_df_temp.columns:
             st.session_state.processed_df_temp.insert(3, 'score(L2)', None)
         if 'dot_product' not in st.session_state.processed_df_temp.columns:
-            st.session_state.processed_df_temp.insert(4, 'dot_product', None) 
+            st.session_state.processed_df_temp.insert(4, 'dot_product', None)
+        # if 'magnitude' not in st.session_state.processed_df_temp.columns:
+        #     st.session_state.processed_df_temp.insert(5, 'magnitude', None) 
             
         # 유사도 계산결과 추가
         for idx, val in enumerate(compression_result):
@@ -151,6 +153,9 @@ def process_query():
             st.session_state.processed_df_temp.loc[row, 'score(cosine)'] = val
             st.session_state.processed_df_temp.loc[row, 'score(L2)'] = val_l2
             st.session_state.processed_df_temp.loc[row, 'dot_product'] = res_dot_products[idx]
+        
+        # 벡터 길이 측정-magnitude : 모두 1로 나옴
+        # st.session_state.processed_df_temp['magnitude'] = np.sqrt((df_vals_temp ** 2).sum(axis=1))
         
         st.session_state.processed_df_q = st.session_state.processed_df_temp
 
@@ -213,7 +218,7 @@ def main():
     )
     
     # 탭 생성
-    tab1, tab2, tab3 = st.tabs(["임베딩변환", "유사도측정", "시각화"])
+    tab1, tab2, tab3 = st.tabs(["임베딩변환", "유사도측정", "차원축소 및 시각화"])
     
     try:
         # 탭1: 임베딩변환
@@ -338,26 +343,31 @@ def main():
                     X_pca = pca.fit_transform(embed_vals)
                     
                     # 병합
-                    df_pca = pd.DataFrame(X_pca, columns=['PC1', 'PC2', 'PC3'])
+                    list_cols_pca = ['PC1', 'PC2', 'PC3']
+                    df_pca = pd.DataFrame(X_pca, columns=list_cols_pca)
+                    # 각 행(벡터)의 거리 계산
+                    df_pca['magnitude'] = np.sqrt((df_pca ** 2).sum(axis=1))
                     process_df_pca = pd.concat([df_pca, st.session_state.processed_df], axis=1)
                     
                     with st.expander("차원 축소(PCA) 결과 확인하기"):
-                        st.dataframe(process_df_pca)
+                        if ['query', 'score(cosine)', 'score(L2)'] in list(process_df_pca.columns):
+                            list_cols_display =['content'] + list_cols_pca + ['magnitude', 'query', 'score(cosine)', 'score(L2)'] + list_cols_embed_only
+                        else:
+                            list_cols_display =['content'] + list_cols_pca + ['magnitude'] + list_cols_embed_only
+                        
+                        st.dataframe(process_df_pca.loc[:, list_cols_display])
                                     
                     # 3D 산점도 생성
-                    toggle_vis_value = st.toggle("차트에 값 나타내기", value=True)
                     vis_title = f'3D PCA Visualization - {embedding_type}'
-                    if toggle_vis_value:
-                        fig = px.scatter_3d(process_df_pca
-                                            ,x='PC1', y='PC2', z='PC3'
-                                            ,title=vis_title
-                                            ,text='content'
-                                            ,symbol='content')
-                    else:
-                        fig = px.scatter_3d(process_df_pca
-                                            ,x='PC1', y='PC2', z='PC3'
-                                            ,title=vis_title
-                                            ,symbol='content')
+                    fig = px.scatter_3d(process_df_pca
+                                        ,x='PC1', y='PC2', z='PC3'
+                                        ,title=vis_title
+                                        ,text='content'
+                                        # ,symbol='content'
+                                        ,color='magnitude'
+                                        ,hover_data={'magnitude':True}
+                                        )
+                    fig.update_traces(marker=dict(size=3))
                     st.plotly_chart(fig, use_container_width=True)
                     
             else:
