@@ -248,7 +248,7 @@ def main():
                 st.subheader("원본 데이터 미리보기")
                 st.dataframe(st.session_state.original_df.head())
                 
-                btn_start_embedding = st.sidebar.button("데이터 전처리 시작")
+                btn_start_embedding = st.sidebar.button("데이터 변환(임베딩) 시작")
                 
                 if btn_start_embedding:
                     # 임베딩 모델 초기화
@@ -273,12 +273,12 @@ def main():
                         st.dataframe(st.session_state.processed_df.head())
                         
                 else:
-                    st.info('좌측 사이드바에서 데이터 전처리 시작 버튼을 클릭하세요.')
+                    st.info('좌측 사이드바에서 데이터 변환(임베딩) 시작 버튼을 클릭하세요.')
                 
         # 탭2: 유사도측정
         with tab2:
             if st.session_state.processed_df is None:
-                st.warning("먼저 탭1에서 데이터 전처리를 진행해주세요.")
+                st.warning("먼저 탭1에서 데이터 변환(임베딩)을 진행해주세요.")
             else:
                 st.subheader(f"예상질의에 대한 유사도 측정하기")
                 st.markdown(f" - embedding model: `{embedding_type}`")
@@ -369,6 +369,17 @@ def main():
                                         )
                     fig.update_traces(marker=dict(size=3))
                     st.plotly_chart(fig, use_container_width=True)
+                    
+                    
+                    eigenvectors = pca.components_
+                    eigenvalues = pca.explained_variance_
+                    variance_ratio = pca.explained_variance_ratio_
+                    df_eigen = pd.DataFrame(eigenvectors
+                                            , index=['PCA1', 'PCA2', 'PCA3']
+                                            , columns=list_cols_embed_only)
+                    df_eigen.insert(0, 'eigenvalues', eigenvalues)
+                    df_eigen.insert(1, 'variance_ratio', variance_ratio)
+                    st.dataframe(df_eigen)
                     
             else:
                 st.warning('위 버튼을 클릭하세요.')
